@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -81,6 +82,12 @@ type RunConfig struct {
 	// APIKey overrides ANTHROPIC_API_KEY. If empty, env var is used.
 	APIKey string
 
+	// BaseURL points the runner at an Anthropic-compatible endpoint (a proxy
+	// or relay) instead of api.anthropic.com. It is a base, not a full
+	// endpoint: the SDK appends /v1/messages. If empty, ANTHROPIC_BASE_URL is
+	// used, and if that is unset too the SDK default applies.
+	BaseURL string
+
 	// UsageAccountID optionally associates local observations with a configured
 	// billing account. Empty keeps the honest local-harness coverage label.
 	UsageAccountID string
@@ -132,6 +139,18 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		cfg.Stderr = os.Stderr
 	}
 
+	// Resolve the API key and, optionally, the Anthropic-compatible base URL
+	// before the store opens: the in-process store threads both into its own
+	// consolidation and extraction calls.
+	apiKey := cfg.APIKey
+	if apiKey == "" {
+		apiKey = os.Getenv("ANTHROPIC_API_KEY")
+	}
+	baseURL := strings.TrimSpace(cfg.BaseURL)
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(os.Getenv("ANTHROPIC_BASE_URL"))
+	}
+
 	// Parse agent file.
 	def, err := ParseAgentFile(cfg.AgentFile, cfg.Inputs)
 	if err != nil {
@@ -143,7 +162,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	// an in-process open here.
 	store := cfg.Store
 	if store == nil {
-		ls, err := OpenLocalStore(cfg.DataDir, cfg.APIKey)
+		ls, err := openLocalStore(cfg.DataDir, apiKey, baseURL)
 		if err != nil {
 			return nil, err
 		}
@@ -230,12 +249,6 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		sessionMessages = append(sessionMessages, session.Message{Role: "user", Content: def.Task})
 	}
 
-	// Resolve API key.
-	apiKey := cfg.APIKey
-	if apiKey == "" {
-		apiKey = os.Getenv("ANTHROPIC_API_KEY")
-	}
-
 	var finalReply string
 	var lastErr error
 
@@ -256,12 +269,14 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		if cfg.llmDoer != nil {
 			msg, err = cfg.llmDoer(ctx, params)
 		} else {
-			var client anthropic.Client
+			opts := []option.RequestOption{}
 			if apiKey != "" {
-				client = anthropic.NewClient(option.WithAPIKey(apiKey))
-			} else {
-				client = anthropic.NewClient()
+				opts = append(opts, option.WithAPIKey(apiKey))
 			}
+			if baseURL != "" {
+				opts = append(opts, option.WithBaseURL(baseURL))
+			}
+			client := anthropic.NewClient(opts...)
 			msg, err = client.Messages.New(ctx, params)
 		}
 

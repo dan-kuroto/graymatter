@@ -148,6 +148,7 @@ func demoConfig(dir string) graymatter.Config {
 	cfg.EmbeddingMode = graymatter.EmbeddingKeyword
 	cfg.ConsolidateLLM = ""
 	cfg.AnthropicAPIKey, cfg.OpenAIAPIKey, cfg.VoyageAPIKey = "", "", ""
+	cfg.AnthropicBaseURL, cfg.OpenAIBaseURL, cfg.VoyageBaseURL = "", "", ""
 	cfg.AsyncConsolidate = false
 	cfg.StrictWrite = true
 	return cfg

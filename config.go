@@ -65,6 +65,15 @@ type Config struct {
 	// Default: value of ANTHROPIC_API_KEY env var.
 	AnthropicAPIKey string
 
+	// AnthropicBaseURL points the Anthropic Messages client at something other
+	// than api.anthropic.com — an Anthropic-compatible proxy, relay or gateway.
+	// It is a base, not a full endpoint: the SDK appends /v1/messages, so give
+	// "https://relay.example.com" or "https://relay.example.com/anthropic".
+	// A trailing "/v1" or "/v1/messages" is accepted and normalised away.
+	// Empty keeps the SDK default (and its ANTHROPIC_BASE_URL fallback).
+	// Default: value of ANTHROPIC_BASE_URL env var.
+	AnthropicBaseURL string
+
 	// VoyageAPIKey for the Voyage AI embeddings endpoint (api.voyageai.com),
 	// which is what the third slot of the embedding chain actually dials.
 	// Before v0.15 that slot dialled an Anthropic embeddings endpoint that
@@ -72,9 +81,24 @@ type Config struct {
 	// Default: value of VOYAGE_API_KEY env var.
 	VoyageAPIKey string
 
+	// VoyageBaseURL points the Voyage embeddings client at an OpenAI-style
+	// compatible embeddings server. It is a base, not a full endpoint: a bare
+	// origin gets /v1/embeddings appended, any other value gets /embeddings
+	// appended, and a value already ending in /embeddings is used verbatim.
+	// Empty keeps https://api.voyageai.com/v1/embeddings.
+	// Default: value of VOYAGE_BASE_URL env var.
+	VoyageBaseURL string
+
 	// OpenAIAPIKey for the OpenAI Embeddings API (text-embedding-3-small).
 	// Default: value of OPENAI_API_KEY env var.
 	OpenAIAPIKey string
+
+	// OpenAIBaseURL points the OpenAI embeddings client at an OpenAI-compatible
+	// embeddings server (vLLM, LM Studio, Ollama's /v1 shim, a gateway). It
+	// follows the same base-vs-endpoint rules as VoyageBaseURL.
+	// Empty keeps https://api.openai.com/v1/embeddings.
+	// Default: value of OPENAI_BASE_URL env var.
+	OpenAIBaseURL string
 
 	// OpenAIModel overrides the OpenAI embedding model.
 	// Default: value of GRAYMATTER_OPENAI_MODEL env var, or "text-embedding-3-small"
@@ -237,8 +261,11 @@ func DefaultConfig() Config {
 		OllamaModel:             envOrDefault("GRAYMATTER_OLLAMA_MODEL", "nomic-embed-text"),
 		OllamaConsolidateModel:  envOrDefault("GRAYMATTER_OLLAMA_CONSOLIDATE_MODEL", "llama3.2"),
 		AnthropicAPIKey:         os.Getenv("ANTHROPIC_API_KEY"),
+		AnthropicBaseURL:        envBaseURL("ANTHROPIC_BASE_URL"),
 		VoyageAPIKey:            os.Getenv("VOYAGE_API_KEY"),
+		VoyageBaseURL:           envBaseURL("VOYAGE_BASE_URL"),
 		OpenAIAPIKey:            os.Getenv("OPENAI_API_KEY"),
+		OpenAIBaseURL:           envBaseURL("OPENAI_BASE_URL"),
 		OpenAIModel:             envOrDefault("GRAYMATTER_OPENAI_MODEL", "text-embedding-3-small"),
 		ConsolidateLLM:          resolveConsolidateLLM(),
 		ConsolidateModel:        "claude-haiku-4-5-20251001",
@@ -278,6 +305,14 @@ func envOrDefault(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// envBaseURL reads a provider base URL. Surrounding whitespace is dropped —
+// an exported variable pasted with a stray newline would otherwise reach the
+// HTTP client as part of the URL — and an unset variable stays empty so the
+// provider keeps its own default.
+func envBaseURL(key string) string {
+	return strings.TrimSpace(os.Getenv(key))
 }
 
 // envInt reads a signed integer knob. Unset or unparseable is 0, which every
@@ -324,6 +359,7 @@ func envBoolDefault(key string, def bool) bool {
 // to Store.Consolidate / Store.MaybeConsolidate without an adapter.
 
 func (c Config) GetAnthropicAPIKey() string        { return c.AnthropicAPIKey }
+func (c Config) GetAnthropicBaseURL() string       { return c.AnthropicBaseURL }
 func (c Config) GetConsolidateLLM() string         { return c.ConsolidateLLM }
 func (c Config) GetConsolidateModel() string       { return c.ConsolidateModel }
 func (c Config) GetOllamaURL() string              { return c.OllamaURL }

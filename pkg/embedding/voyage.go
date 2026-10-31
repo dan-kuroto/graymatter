@@ -25,18 +25,19 @@ const (
 // and Put silently degraded to keyword-only memory. See CHANGELOG v0.15.
 type VoyageProvider struct {
 	apiKey     string
-	endpoint   string // full request target; test seam, defaults to voyageEmbedURL
+	endpoint   string // full request target; defaults to voyageEmbedURL
 	httpClient *http.Client
 	mu         sync.Mutex
 	cache      map[string][]float32 // insertion-ordered eviction, see store()
 	cacheOrder []string
 }
 
-// NewVoyage creates a Voyage-backed embedding provider.
+// NewVoyage creates a Voyage-backed embedding provider. If cfg.VoyageBaseURL
+// is empty it dials the public Voyage endpoint.
 func NewVoyage(cfg Config) *VoyageProvider {
 	return &VoyageProvider{
 		apiKey:   cfg.VoyageAPIKey,
-		endpoint: voyageEmbedURL,
+		endpoint: embeddingsEndpoint(cfg.VoyageBaseURL, voyageEmbedURL),
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},

@@ -84,12 +84,14 @@ func NewWithConfig(cfg Config) (*Memory, error) {
 	}
 
 	embedder := embedding.AutoDetect(embedding.Config{
-		Mode:         embedding.Mode(cfg.EmbeddingMode),
-		OllamaURL:    cfg.OllamaURL,
-		OllamaModel:  cfg.OllamaModel,
-		VoyageAPIKey: cfg.VoyageAPIKey,
-		OpenAIAPIKey: cfg.OpenAIAPIKey,
-		OpenAIModel:  cfg.OpenAIModel,
+		Mode:          embedding.Mode(cfg.EmbeddingMode),
+		OllamaURL:     cfg.OllamaURL,
+		OllamaModel:   cfg.OllamaModel,
+		VoyageAPIKey:  cfg.VoyageAPIKey,
+		VoyageBaseURL: cfg.VoyageBaseURL,
+		OpenAIAPIKey:  cfg.OpenAIAPIKey,
+		OpenAIBaseURL: cfg.OpenAIBaseURL,
+		OpenAIModel:   cfg.OpenAIModel,
 	})
 
 	store, err := memory.Open(memory.StoreConfig{

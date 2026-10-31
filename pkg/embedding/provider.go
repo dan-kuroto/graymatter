@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -68,7 +69,9 @@ type Config struct {
 	OllamaModel     string
 	AnthropicAPIKey string // Deprecated: unused by every mode; kept for struct compatibility.
 	VoyageAPIKey    string
+	VoyageBaseURL   string // optional; empty keeps the Voyage default endpoint
 	OpenAIAPIKey    string
+	OpenAIBaseURL   string // optional; empty keeps the OpenAI default endpoint
 	OpenAIModel     string // defaults to text-embedding-3-small
 }
 
@@ -113,6 +116,34 @@ func voyageOrKeyword(cfg Config) Provider {
 		return NewVoyage(cfg)
 	}
 	return NewKeyword()
+}
+
+// embeddingsEndpoint resolves a configured base URL to the full request target
+// for an OpenAI-style embeddings API.
+//
+// The published base URLs (https://api.openai.com/v1, api.voyageai.com/v1)
+// carry the version prefix, and OpenAI-compatible servers mount the endpoint
+// under whatever prefix they choose (…/v1, …/api/paas/v4, …/openai). So a value
+// with a path is authoritative and only gets /embeddings appended, unless the
+// caller already passed the full endpoint. A bare origin has no path to carry a
+// version, so the conventional /v1 is supplied for it. Empty keeps fallback,
+// which is how the zero value reproduces the previous hardcoded behaviour.
+func embeddingsEndpoint(base, fallback string) string {
+	base = strings.TrimRight(strings.TrimSpace(base), "/")
+	if base == "" {
+		return fallback
+	}
+	if strings.HasSuffix(base, "/embeddings") {
+		return base
+	}
+	rest := base
+	if scheme := strings.Index(rest, "://"); scheme >= 0 {
+		rest = rest[scheme+3:]
+	}
+	if strings.Contains(rest, "/") {
+		return base + "/embeddings"
+	}
+	return base + "/v1/embeddings"
 }
 
 // ollamaReachable does a fast HEAD probe to check if Ollama is up.

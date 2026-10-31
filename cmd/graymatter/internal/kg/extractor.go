@@ -23,6 +23,12 @@ type ExtractorConfig struct {
 	// If empty, ANTHROPIC_API_KEY env var is used.
 	APIKey string
 
+	// BaseURL points LLM extraction at an Anthropic-compatible endpoint (a
+	// proxy or relay). It is a base, not a full endpoint: the SDK appends
+	// /v1/messages. Empty keeps the SDK default and its ANTHROPIC_BASE_URL
+	// fallback.
+	BaseURL string
+
 	// Model is the Anthropic model for LLM extraction.
 	// Default: "claude-haiku-4-5-20251001" (fast + cheap).
 	Model string
@@ -42,7 +48,7 @@ func NewExtractor(cfg ExtractorConfig) EntityExtractor {
 		if model == "" {
 			model = "claude-haiku-4-5-20251001"
 		}
-		return NewLLMExtractor(cfg.APIKey, model)
+		return newLLMExtractor(cfg.APIKey, model, cfg.BaseURL)
 	}
 	return &regexExtractor{}
 }
@@ -53,10 +59,20 @@ func NewExtractor(cfg ExtractorConfig) EntityExtractor {
 // never to silence: an agent that opted into LLM extraction keeps getting a
 // graph even when the model is down.
 func NewLLMExtractor(apiKey, model string) EntityExtractor {
+	return newLLMExtractor(apiKey, model, "")
+}
+
+// newLLMExtractor is NewLLMExtractor plus an optional Anthropic-compatible
+// base URL, so a relay can serve the extraction call too.
+func newLLMExtractor(apiKey, model, baseURL string) EntityExtractor {
 	if model == "" {
 		model = "claude-haiku-4-5-20251001"
 	}
-	return &llmFallback{llm: &llmExtractor{apiKey: apiKey, model: model}, fallback: &regexExtractor{}}
+	return &llmFallback{llm: &llmExtractor{
+		apiKey:  apiKey,
+		model:   model,
+		baseURL: strings.TrimSpace(baseURL),
+	}, fallback: &regexExtractor{}}
 }
 
 // ExtractorFromEnv honours GRAYMATTER_KG_LLM_EXTRACT=1 as the opt-in switch
@@ -341,8 +357,9 @@ func (f *llmFallback) Extract(text string) ([]Node, []Edge, error) {
 }
 
 type llmExtractor struct {
-	apiKey string
-	model  string
+	apiKey  string
+	model   string
+	baseURL string
 }
 
 const extractionPrompt = `Extract named entities from the following text.
@@ -357,12 +374,16 @@ Text: %s`
 func (e *llmExtractor) Extract(text string) ([]Node, []Edge, error) {
 	prompt := fmt.Sprintf(extractionPrompt, text)
 
-	var client anthropic.Client
+	opts := []option.RequestOption{}
 	if e.apiKey != "" {
-		client = anthropic.NewClient(option.WithAPIKey(e.apiKey))
-	} else {
-		client = anthropic.NewClient()
+		opts = append(opts, option.WithAPIKey(e.apiKey))
 	}
+	if e.baseURL != "" {
+		// WithBaseURL is tolerant of a trailing slash and of a path prefix;
+		// the SDK appends /v1/messages to whatever it is given.
+		opts = append(opts, option.WithBaseURL(e.baseURL))
+	}
+	client := anthropic.NewClient(opts...)
 
 	msg, err := client.Messages.New(context.Background(), anthropic.MessageNewParams{
 		Model:     anthropic.Model(e.model),

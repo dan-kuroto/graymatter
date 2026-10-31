@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
 // ExtractConfig is the subset of configuration needed for fact extraction.
@@ -65,7 +64,7 @@ func extractViaAnthropic(ctx context.Context, text string, cfg ExtractConfig) ([
 }
 
 func extractViaAnthropicWithProvenance(ctx context.Context, text string, cfg ExtractConfig) (ExtractionResult, error) {
-	client := anthropic.NewClient(option.WithAPIKey(cfg.GetAnthropicAPIKey()))
+	client := newAnthropicClient(cfg.GetAnthropicAPIKey(), anthropicBaseURL(cfg))
 	msg, err := client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.Model(cfg.GetConsolidateModel()),
 		MaxTokens: 1024,

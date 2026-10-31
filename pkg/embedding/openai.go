@@ -21,6 +21,7 @@ const (
 type OpenAIProvider struct {
 	apiKey     string
 	model      string
+	endpoint   string // full request target; defaults to openaiEmbedURL
 	httpClient *http.Client
 	mu         sync.Mutex
 	cache      map[string][]float32
@@ -28,15 +29,17 @@ type OpenAIProvider struct {
 }
 
 // NewOpenAI creates an OpenAI-backed embedding provider.
-// If cfg.OpenAIModel is empty, it defaults to text-embedding-3-small.
+// If cfg.OpenAIModel is empty, it defaults to text-embedding-3-small, and if
+// cfg.OpenAIBaseURL is empty it dials the public OpenAI endpoint.
 func NewOpenAI(cfg Config) *OpenAIProvider {
 	model := cfg.OpenAIModel
 	if model == "" {
 		model = openaiModel
 	}
 	return &OpenAIProvider{
-		apiKey: cfg.OpenAIAPIKey,
-		model:  model,
+		apiKey:   cfg.OpenAIAPIKey,
+		model:    model,
+		endpoint: embeddingsEndpoint(cfg.OpenAIBaseURL, openaiEmbedURL),
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -75,7 +78,7 @@ func (o *OpenAIProvider) Embed(ctx context.Context, text string) ([]float32, err
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, openaiEmbedURL, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}

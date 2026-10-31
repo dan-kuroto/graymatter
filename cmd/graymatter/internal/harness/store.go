@@ -35,10 +35,21 @@ type LocalStore struct {
 // OpenLocalStore opens an in-process store at dataDir for a run. apiKey, when
 // non-empty, overrides ANTHROPIC_API_KEY for embedding/consolidation.
 func OpenLocalStore(dataDir, apiKey string) (*LocalStore, error) {
+	return openLocalStore(dataDir, apiKey, "")
+}
+
+// openLocalStore additionally threads an Anthropic-compatible base URL into the
+// store, so a run that dials a relay for its own messages does not then have
+// consolidation reach api.anthropic.com with the relay's key. An empty baseURL
+// keeps whatever DefaultConfig resolved from the environment.
+func openLocalStore(dataDir, apiKey, baseURL string) (*LocalStore, error) {
 	cfg := graymatter.DefaultConfig()
 	cfg.DataDir = dataDir
 	if apiKey != "" {
 		cfg.AnthropicAPIKey = apiKey
+	}
+	if baseURL != "" {
+		cfg.AnthropicBaseURL = baseURL
 	}
 	mem, err := graymatter.NewWithConfig(cfg)
 	if err != nil {
